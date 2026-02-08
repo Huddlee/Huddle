@@ -6,6 +6,7 @@ import com.huddlee.backendspringboot.dtos.WebRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.ObjectMapper;
@@ -20,7 +21,19 @@ public class SignalingService {
     private final ObjectMapper mapper;
 
     public void onConnection(WebSocketSession session) {
+        // Already a session with the userId
         String userId = session.getAttributes().get("userId").toString();
+
+        if(roomRegistry.uidToSession(userId) != null) {
+            try {
+                session.close(CloseStatus.POLICY_VIOLATION);
+            }
+            catch (Exception e) {
+                log.error("Error closing session: {}, sessionId {}", e.getMessage(), session.getId());
+            }
+            return;
+        }
+
         roomRegistry.registerConnection(userId, session);
     }
 
@@ -50,9 +63,6 @@ public class SignalingService {
     }
 
     public void handleMessage(WebSocketSession session, WebRequest req) {
-        // Currently, the method fetches the "to" userId to check from the
-
-
         // get the room code by the session id, if the room exists, get the username for whom this message is sent
         // make sure that both the users are in the same room
 
@@ -84,7 +94,7 @@ public class SignalingService {
                 session.sendMessage(new TextMessage(mapper.writeValueAsString(response)));
         }
         catch (Exception e) {
-            log.error("Error sending message: {}, sessionId {}", e.getMessage(), session.getId());
+            log.warn("Error sending message: {}, sessionId {}", e.getMessage(), session.getId());
         }
     }
 

@@ -19,7 +19,7 @@ public class RoomRegistry {
     private final Map<String, String> userToRoomCode = new HashMap<>();
     // RoomCode to Room
     private final Map<String, Room> roomCodeToRoom = new ConcurrentHashMap<>();
-    // SessionId to Session
+    // SessionId to Session (this cannot be stored in redis)
     private final Map<String, WebSocketSession> sidToSession = new ConcurrentHashMap<>();
 
 
@@ -77,21 +77,28 @@ public class RoomRegistry {
     public String sidToUid(String sid) {
         return sessionToUser.get(sid);
     }
-
+    
     public boolean peersInSameRoom(String p1, String p2) {
-        return userToRoomCode.get(p1)
-                .equals(userToRoomCode.get(p2));
+        String rc1 = userToRoomCode.get(p1);
+        String rc2 = userToRoomCode.get(p2);
+        if (rc1 == null || rc2 == null) return false;
+        return rc1.equals(rc2);
     }
 
     public WebSocketSession uidToSession(String uid) {
-        return sidToSession.get(userToSession.get(uid));
+        String sid = userToSession.get(uid);
+        if(sid == null) return null;
+
+        return sidToSession.get(sid);
     }
 
     public void disconnect(String sid) {
         String uid = sessionToUser.get(sid);
         Room room = roomCodeToRoom.get(rc + userToRoomCode.get(uid));
 
-        room.getUsers().remove(uid);
+        if (room != null)
+            room.getUsers().remove(uid);
+
         userToSession.remove(uid);
         userToRoomCode.remove(uid);
         sessionToUser.remove(sid);

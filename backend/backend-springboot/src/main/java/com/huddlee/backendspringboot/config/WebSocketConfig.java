@@ -12,11 +12,12 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketConfigurer {
     private final SignalingHandler signalingHandler;
+    private final UserHandshakeInterceptor userHandshakeInterceptor;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(signalingHandler, "/ws")
-                .addInterceptors(new UserHandshakeInterceptor())
+                .addInterceptors(userHandshakeInterceptor)
                 .setAllowedOrigins("*");
     }
 }

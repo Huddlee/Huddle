@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/room")
+@RequestMapping("/api/room")
 public class RoomController {
 
     private final RoomRegistry roomRegistry;
@@ -18,5 +18,4 @@ public class RoomController {
         // Validate the user JWT, before the req ig, and then create the room
         return roomRegistry.generateRoomCode();
     }
-
 }
