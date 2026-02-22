@@ -1,7 +1,10 @@
 package com.huddlee.backendspringboot.services;
 
 import com.huddlee.backendspringboot.models.Room;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.WebSocketSession;
 
@@ -9,99 +12,122 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
+@RequiredArgsConstructor
 public class RoomRegistry {
 
+    private final static String u2s = "u2s:";
+    private final static String s2u = "s2u:";
+    private final static String u2rc = "u2rc:";
+    private final static String rc2r = "rc2r:";
+
     // UserId to SessionId
-    private final Map<String, String> userToSession = new HashMap<>();
+    private final StringRedisTemplate uidToSid;
     // SessionId to UserId
-    private final Map<String, String> sessionToUser = new HashMap<>();
+    private final StringRedisTemplate sidToUid;
     // UserId to RoomCode
-    private final Map<String, String> userToRoomCode = new HashMap<>();
+    private final StringRedisTemplate uidToRc;
     // RoomCode to Room
-    private final Map<String, Room> roomCodeToRoom = new ConcurrentHashMap<>();
+    private final RedisTemplate<String, Room> RcToRoom;
+
     // SessionId to Session (this cannot be stored in redis)
     private final Map<String, WebSocketSession> sidToSession = new ConcurrentHashMap<>();
 
+    private final Random rand = new Random();
 
+    @Value("${max.room.size}")
+    private int MAX_PEERS;
     @Value("${room.code.length}")
     private int codeLen;
     @Value("${room.code.charset}")
     private String charSet;
-    private final String rc = "rc:";
 
     public String generateRoomCode(){
         StringBuilder roomCode = new StringBuilder();
-        Random rand = new Random();
 
         while (roomCode.length() < codeLen)
             roomCode.append(charSet.charAt(rand.nextInt(charSet.length())));
 
         // regenerate if the rc is a duplicate that is already present
-        if(roomCodeToRoom.containsKey(rc + roomCode))
+        if(RcToRoom.hasKey(rc2r + roomCode))
             return generateRoomCode();
 
         Room room = new Room(roomCode.toString(), new ArrayList<>());
-        roomCodeToRoom.put(rc + roomCode, room);
+        RcToRoom.opsForValue().set(rc2r + roomCode, room);
         return roomCode.toString();
     }
 
+    public boolean canJoin(String roomCode){
+        if (RcToRoom.hasKey(rc2r + roomCode)){
+            Room room = RcToRoom.opsForValue().get(rc2r + roomCode);
+            return room.getUsers().size() < MAX_PEERS;
+        }
+        return false;
+    }
+
     public void registerConnection(String userId, WebSocketSession session) {
-        userToSession.put(userId, session.getId());
-        sessionToUser.put(session.getId(), userId);
+        uidToSid.opsForValue().set(u2s + userId, session.getId());
+        sidToUid.opsForValue().set(s2u + session.getId(), userId);
         sidToSession.put(session.getId(), session);
     }
 
     public boolean roomExists(String roomCode) {
-        return roomCodeToRoom.containsKey(rc + roomCode);
+        return RcToRoom.hasKey(rc2r + roomCode);
+    }
+
+    public boolean sessionInRoom(WebSocketSession session) {
+        return sidToRc(session.getId()) != null;
     }
 
     public List<String> getPeers(String roomCode) {
-        Room room = roomCodeToRoom.get(rc + roomCode);
-        return room.getUsers();
-    }
-
-    public boolean peerJoin(WebSocketSession session, String roomCode) {
-        Room room = roomCodeToRoom.get(rc + roomCode);
-        // Make sure that the size of the room is not full
-        if(room.getUsers().size() == 4) return false;
-        room.getUsers().add(sessionToUser.get(session.getId()));
-
-        userToRoomCode.put(sessionToUser.get(session.getId()), roomCode);
-        return true;
+        // Gets the room from room code and returns the list of users
+        return RcToRoom.opsForValue().get(rc2r + roomCode).getUsers();
     }
 
     public String sidToRc(String sid) {
-        return userToRoomCode.get(sessionToUser.get(sid));
+        return uidToRc.opsForValue().get(u2rc + sidToUid(sid));
     }
 
     public String sidToUid(String sid) {
-        return sessionToUser.get(sid);
-    }
-    
-    public boolean peersInSameRoom(String p1, String p2) {
-        String rc1 = userToRoomCode.get(p1);
-        String rc2 = userToRoomCode.get(p2);
-        if (rc1 == null || rc2 == null) return false;
-        return rc1.equals(rc2);
+        return sidToUid.opsForValue().get(s2u + sid);
     }
 
-    public WebSocketSession uidToSession(String uid) {
-        String sid = userToSession.get(uid);
-        if(sid == null) return null;
+    public String uidToSid(String uid) {
+        return uidToSid.opsForValue().get(u2s + uid);
+    }
 
+    public Room getRoom(String roomCode) {
+        return RcToRoom.opsForValue().get(rc2r + roomCode);
+    }
+
+    public void saveRoom(Room room) {
+        RcToRoom.opsForValue().set(rc2r + room.getRoomCode(), room);
+    }
+
+    public void saveUidToRc(String uid, String rc){
+        uidToRc.opsForValue().set(u2rc + uid, rc);
+    }
+
+
+    public boolean isLocalConnection(String sid) {
+        if (sid == null || sid.isEmpty()) return true;
+        return sidToSession.containsKey(sid);
+    }
+
+    public WebSocketSession getSessionFromSid(String sid) {
         return sidToSession.get(sid);
     }
 
-    public void disconnect(String sid) {
-        String uid = sessionToUser.get(sid);
-        Room room = roomCodeToRoom.get(rc + userToRoomCode.get(uid));
+    public void disconnect(String sid, String uid, String rc) {
+        Room room = RcToRoom.opsForValue().get(rc2r + rc);
 
-        if (room != null)
+        if (room != null){
             room.getUsers().remove(uid);
+            RcToRoom.opsForValue().set(rc2r + uidToRc.opsForValue().get(u2rc + uid), room);
+        }
 
-        userToSession.remove(uid);
-        userToRoomCode.remove(uid);
-        sessionToUser.remove(sid);
+        uidToSid.delete(u2s + uid);
+        uidToRc.delete(u2rc + uid);
+        sidToUid.delete(s2u + sid);
         sidToSession.remove(sid);
     }
 }

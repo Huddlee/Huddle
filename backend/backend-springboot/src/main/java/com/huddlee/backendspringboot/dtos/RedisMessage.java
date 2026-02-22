@@ -6,8 +6,9 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class WsResponse {
-    private ResponseType responseType;
+public class RedisMessage {
+    private ResponseType type;
     private String message;
     private String from;
+    private String to;
 }

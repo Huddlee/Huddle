@@ -1,9 +1,6 @@
 package com.huddlee.backendspringboot.models;
 
-public enum MessageType {
-    JOIN,
-    LEAVE,
-
+public enum PeerMessageType {
     OFFER,
     ANSWER,
     ICE

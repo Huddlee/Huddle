@@ -23,7 +23,7 @@ public class JwtUtils {
     private String jwtSecret;
 
     @Value("${jwt.expiration}")
-    private int jwtExpiration;
+    private long jwtExpiration;
 
     //extracts jwt token from auth header
     public String getJWTFromHeader(HttpServletRequest request) {
