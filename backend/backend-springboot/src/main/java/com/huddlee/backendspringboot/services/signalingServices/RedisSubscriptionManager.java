@@ -1,4 +1,4 @@
-package com.huddlee.backendspringboot.services;
+package com.huddlee.backendspringboot.services.signalingServices;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

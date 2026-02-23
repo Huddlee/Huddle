@@ -1,4 +1,4 @@
-package com.huddlee.backendspringboot.services;
+package com.huddlee.backendspringboot.services.userServices;
 
 import com.huddlee.backendspringboot.models.User;
 import lombok.Data;

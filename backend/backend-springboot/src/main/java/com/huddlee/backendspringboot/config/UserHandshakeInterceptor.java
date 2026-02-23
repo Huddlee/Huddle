@@ -18,10 +18,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserHandshakeInterceptor implements HandshakeInterceptor {
 
+    private final JwtUtils jwtUtils;
     @Value("${signaling.secret.salt}")
     private String secretSalt;
-
-    private final JwtUtils jwtUtils;
 
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
@@ -39,12 +38,13 @@ public class UserHandshakeInterceptor implements HandshakeInterceptor {
             attributes.put("userId",
                     UUID.nameUUIDFromBytes(
                             (jwtUtils.getUsernameFromToken(token) + secretSalt)
-                            .getBytes(StandardCharsets.UTF_8)));
+                                    .getBytes(StandardCharsets.UTF_8)));
             return true;
         }
         return false;
     }
 
     @Override
-    public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response, WebSocketHandler wsHandler, @Nullable Exception exception) {}
+    public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response, WebSocketHandler wsHandler, @Nullable Exception exception) {
+    }
 }

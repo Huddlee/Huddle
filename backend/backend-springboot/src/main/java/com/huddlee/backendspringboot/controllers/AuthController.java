@@ -3,7 +3,7 @@ package com.huddlee.backendspringboot.controllers;
 import com.huddlee.backendspringboot.dtos.LoginRequest;
 import com.huddlee.backendspringboot.dtos.RegisterRequest;
 import com.huddlee.backendspringboot.models.User;
-import com.huddlee.backendspringboot.services.UserService;
+import com.huddlee.backendspringboot.services.userServices.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;

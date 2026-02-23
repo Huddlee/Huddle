@@ -1,4 +1,4 @@
-package com.huddlee.backendspringboot.services;
+package com.huddlee.backendspringboot.services.signalingServices;
 
 import com.huddlee.backendspringboot.dtos.RedisMessage;
 import com.huddlee.backendspringboot.dtos.WebRequest;
@@ -22,27 +22,24 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SignalingService {
 
-    @Value("${redis.channel.name}")
-    private String channelName;
-    @Value("${max.room.size}")
-    private int MAX_PEERS;
-
     private final RoomRegistry roomRegistry;
     private final ObjectMapper mapper;
     private final RedisSubscriptionManager subscriptionManager;
     private final StringRedisTemplate redisTemplate;
-
+    @Value("${redis.channel.name}")
+    private String channelName;
+    @Value("${max.room.size}")
+    private int MAX_PEERS;
 
     public void onConnection(WebSocketSession session) {
         // Already a session with the uid
         String uid = session.getAttributes().get("userId").toString();
 
         // check if this UID is already associated with a sid
-        if(roomRegistry.uidToSid(uid) != null) {
+        if (roomRegistry.uidInSession(uid)) {
             try {
                 session.close(CloseStatus.POLICY_VIOLATION);
-            }
-            catch (Exception e) {
+            } catch (Exception e) {
                 log.error("Error closing session: {}, sessionId {}", e.getMessage(), session.getId());
             }
             return;
@@ -66,11 +63,11 @@ public class SignalingService {
 
         Room room = roomRegistry.getRoom(req.getRoomCode());
         // Does the room exist?
-        if (room != null){
+        if (room != null) {
             String roomCode = req.getRoomCode();
 
             // Is there any space in the room?
-            if(room.getUsers().size() < MAX_PEERS){
+            if (room.getUsers().size() < MAX_PEERS) {
                 String uid = roomRegistry.sidToUid(session.getId());
 
                 // Add the user into the room
@@ -89,16 +86,14 @@ public class SignalingService {
 
                 // Send the existing peers update for peer join
                 List<String> peers = roomRegistry.getPeers(roomCode);
-                for(String peer : peers) {
-                    if(!peer.equals(uid))
-                        sendMessage(roomRegistry.uidToSid(peer), ResponseType.PEER_JOIN, uid + "Joined the room", null);
+                for (String peer : peers) {
+                    if (!peer.equals(uid))
+                        sendMessage(roomRegistry.uidToSid(peer), ResponseType.PEER_JOIN, uid + " Joined the room", null);
                 }
-            }
-            else {
+            } else {
                 sendMessage(session.getId(), ResponseType.ERROR, "Room is full", null);
             }
-        }
-        else {
+        } else {
             sendMessage(session.getId(), ResponseType.ERROR, "Room does not exist", null);
         }
     }
@@ -117,7 +112,7 @@ public class SignalingService {
                 Room room = roomRegistry.getRoom(roomCode);
 
                 // Check if the receiver is in the sender's room
-                if(room.getUsers().contains(req.getTo())){
+                if (room.getUsers().contains(req.getTo())) {
                     // Get the other peers sid and send them the response
                     String otherPeer = roomRegistry.uidToSid(req.getTo());
 
@@ -127,16 +122,13 @@ public class SignalingService {
                             responseType, // Message type
                             req.getMessage(), // Actual Message
                             userId); // From
-                }
-                else {
+                } else {
                     sendMessage(session.getId(), ResponseType.ERROR, "Invalid request", null);
                 }
-            }
-            else {
+            } else {
                 sendMessage(session.getId(), ResponseType.ERROR, "Not in a room", null);
             }
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             sendMessage(session.getId(), ResponseType.ERROR, "Invalid response type", null);
         }
     }
@@ -146,7 +138,7 @@ public class SignalingService {
     }
 
     private void sendMessage(String sid, ResponseType type, String message, String from) {
-        if(from == null) from = "SERVER";
+        if (from == null) from = "SERVER";
 
         // If this is a local session, then get the session from sid and send the message/response
         if (roomRegistry.isLocalConnection(sid)) {
@@ -155,8 +147,7 @@ public class SignalingService {
             try {
                 if (session != null && session.isOpen())
                     session.sendMessage(new TextMessage(mapper.writeValueAsString(response)));
-            }
-            catch (Exception e) {
+            } catch (Exception e) {
                 log.warn("Error sending message: {}, sessionId {}", e.getMessage(), session.getId());
             }
         }
@@ -170,8 +161,7 @@ public class SignalingService {
         RedisMessage redisMessage = new RedisMessage(type, message, from, to);
         try {
             redisTemplate.convertAndSend(channelName + roomRegistry.sidToRc(to), mapper.writeValueAsString(redisMessage));
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             log.warn("Error publishing message: {}, sessionId {}", e.getMessage(), to);
         }
     }
@@ -188,17 +178,17 @@ public class SignalingService {
             // Notify all the other peers so that they can disconnect from the peer
             for (String peer : peers) {
                 if (!peer.equals(uid))
-                    sendMessage(roomRegistry.uidToSid(uid), ResponseType.PEER_DC, uid + " disconnected", null);
+                    sendMessage(roomRegistry.uidToSid(peer), ResponseType.PEER_DC, uid + " disconnected", null);
             }
         }
 
         roomRegistry.disconnect(session.getId(), uid, roomCode);
 
-        if (!forced){
+        if (!forced) {
             sendMessage(session.getId(), ResponseType.PEER_DC, "SuccessFully Disconnected", null);
-            try{
+            try {
                 session.close(CloseStatus.NORMAL);
-            }catch (Exception e){
+            } catch (Exception e) {
                 log.warn("Error closing session: {}, sessionId {}", e.getMessage(), session.getId());
             }
         }

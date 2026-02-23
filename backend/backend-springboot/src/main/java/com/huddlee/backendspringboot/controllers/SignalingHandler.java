@@ -1,7 +1,7 @@
 package com.huddlee.backendspringboot.controllers;
 
 import com.huddlee.backendspringboot.dtos.WebRequest;
-import com.huddlee.backendspringboot.services.SignalingService;
+import com.huddlee.backendspringboot.services.signalingServices.SignalingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

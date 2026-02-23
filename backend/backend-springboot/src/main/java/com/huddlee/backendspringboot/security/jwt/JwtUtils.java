@@ -1,6 +1,6 @@
 package com.huddlee.backendspringboot.security.jwt;
 
-import com.huddlee.backendspringboot.services.UserDetailImpl;
+import com.huddlee.backendspringboot.services.userServices.UserDetailImpl;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;

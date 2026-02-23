@@ -1,4 +1,4 @@
-package com.huddlee.backendspringboot.services;
+package com.huddlee.backendspringboot.services.signalingServices;
 
 import com.huddlee.backendspringboot.dtos.RedisMessage;
 import com.huddlee.backendspringboot.dtos.WsResponse;

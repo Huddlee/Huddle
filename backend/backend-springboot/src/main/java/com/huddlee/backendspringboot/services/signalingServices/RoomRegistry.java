@@ -1,4 +1,4 @@
-package com.huddlee.backendspringboot.services;
+package com.huddlee.backendspringboot.services.signalingServices;
 
 import com.huddlee.backendspringboot.models.Room;
 import lombok.RequiredArgsConstructor;
@@ -72,6 +72,10 @@ public class RoomRegistry {
 
     public boolean roomExists(String roomCode) {
         return RcToRoom.hasKey(rc2r + roomCode);
+    }
+
+    public boolean uidInSession(String uid){
+        return uidToSid(uid) != null;
     }
 
     public boolean sessionInRoom(WebSocketSession session) {
