@@ -60,9 +60,4 @@ public class UserService {
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         return userRepo.save(user);
     }
-
-    public User registerGuest(User user) {
-        user.setPassword(passwordEncoder.encode(guestPassword));
-        return userRepo.save(user);
-    }
 }

@@ -13,7 +13,7 @@ const LandingPage: React.FC = () => {
             setLoading(true);
             const token = await guestLogin();
             localStorage.setItem('huddle_token', token);
-            navigate('/dashboard');
+            navigate('/');
         } catch (error) {
             console.error('Login failed', error);
             setError('Failed to login as guest. Please ensure the backend is running.');
@@ -46,6 +46,7 @@ const LandingPage: React.FC = () => {
                 </p>
 
                 <button
+                    id="landing-guest"
                     onClick={handleJoinAsGuest}
                     disabled={loading}
                     className="group relative w-full flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-semibold text-lg py-4 px-8 rounded-2xl shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(99,102,241,0.6)] transition-all duration-300 ease-out active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
@@ -64,6 +65,37 @@ const LandingPage: React.FC = () => {
                         </>
                     )}
                 </button>
+
+                {/* Divider */}
+                <div className="flex items-center gap-3 w-full my-4">
+                    <div className="flex-1 h-px bg-white/15"></div>
+                    <span className="text-xs text-indigo-200/40 font-medium uppercase tracking-wider">or</span>
+                    <div className="flex-1 h-px bg-white/15"></div>
+                </div>
+
+                {/* Auth Buttons */}
+                <div className="flex gap-3 w-full">
+                    <button
+                        id="landing-login"
+                        onClick={() => navigate('/login')}
+                        className="flex-1 flex items-center justify-center gap-2 bg-white/5 border border-white/15 hover:bg-white/10 hover:border-white/25 text-white font-semibold py-3.5 px-6 rounded-2xl transition-all duration-300 ease-out active:scale-95"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                        </svg>
+                        <span>Log In</span>
+                    </button>
+                    <button
+                        id="landing-signup"
+                        onClick={() => navigate('/register')}
+                        className="flex-1 flex items-center justify-center gap-2 bg-white/5 border border-white/15 hover:bg-white/10 hover:border-white/25 text-white font-semibold py-3.5 px-6 rounded-2xl transition-all duration-300 ease-out active:scale-95"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                        </svg>
+                        <span>Sign Up</span>
+                    </button>
+                </div>
             </div>
 
             <div className="absolute bottom-6 text-sm text-indigo-200/50 font-medium">

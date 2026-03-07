@@ -31,9 +31,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        //get token from the header
         try {
+            // Get token from the header
             String token = jwtUtils.getJWTFromHeader(request);
+
+            // FIX: Check query parameter if header is missing (specifically for WebSockets)
+            if (token == null && request.getRequestURI().startsWith("/ws")) {
+                token = request.getParameter("token");
+            }
 
             if(token != null && jwtUtils.validateToken(token)){
                 String username = jwtUtils.getUsernameFromToken(token);
@@ -49,7 +54,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 }
             }
         } catch (Exception e) {
-            log.error("Error while getting JWT from header: {}", e.getMessage());
+            log.error("Error while getting JWT: {}", e.getMessage());
         }
         filterChain.doFilter(request, response);
     }

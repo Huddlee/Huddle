@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 
@@ -26,15 +27,29 @@ public class UserHandshakeInterceptor implements HandshakeInterceptor {
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                    WebSocketHandler wsHandler, Map<String, Object> attributes) {
 
-        HttpHeaders headers = request.getHeaders();
-        List<String> auth = headers.get("Authorization");
-        if (auth == null || auth.isEmpty()) {
+        String token = null;
+
+        // 1. Try to get the token from query parameters (For Browsers)
+        if (request instanceof ServletServerHttpRequest servletRequest) {
+            token = servletRequest.getServletRequest().getParameter("token");
+        }
+
+        // 2. Fallback to header (For Postman/Testing tools)
+        if (token == null) {
+            HttpHeaders headers = request.getHeaders();
+            List<String> auth = headers.get("Authorization");
+            if (auth != null && !auth.isEmpty()) {
+                token = auth.getFirst().replace("Bearer ", "");
+            }
+        }
+
+        // 3. Reject if no token is found
+        if (token == null) {
             return false;
         }
-        String token = auth.getFirst().replace("Bearer ", "");
 
+        // Validate and set attributes
         if (jwtUtils.validateToken(token)) {
-            // Generate the UUID for signaling
             attributes.put("userId",
                     UUID.nameUUIDFromBytes(
                             (jwtUtils.getUsernameFromToken(token) + secretSalt)
@@ -42,6 +57,10 @@ public class UserHandshakeInterceptor implements HandshakeInterceptor {
             return true;
         }
         return false;
+    }
+
+    private String getTokenFromQuery(String query) {
+        return query.split("=")[1];
     }
 
     @Override

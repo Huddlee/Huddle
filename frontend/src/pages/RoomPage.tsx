@@ -274,7 +274,7 @@ const RoomPage: React.FC = () => {
     useEffect(() => {
         const activeRoom = sessionStorage.getItem('active_room');
         if (activeRoom !== roomCode) {
-            navigate('/dashboard');
+            navigate('/');
             return;
         }
 
@@ -377,7 +377,7 @@ const RoomPage: React.FC = () => {
             localStream.getTracks().forEach(track => track.stop());
             setLocalStream(null);
         }
-        navigate('/dashboard');
+        navigate('/');
     };
 
     const handleCopyRoomCode = async () => {
