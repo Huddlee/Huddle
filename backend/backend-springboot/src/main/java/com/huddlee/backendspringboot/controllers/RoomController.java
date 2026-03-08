@@ -1,6 +1,7 @@
 package com.huddlee.backendspringboot.controllers;
 
 import com.huddlee.backendspringboot.services.signalingServices.RoomRegistry;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -25,12 +26,17 @@ public class RoomController {
         if (canNotQuery(principal)) {
             return ResponseEntity.status(409).body("User already in a room");
         }
-        return ResponseEntity.ok(roomRegistry.generateRoomCode());
+        String roomCode = roomRegistry.generateRoomCode(1);
+
+        if (roomCode == null) {
+            return ResponseEntity.status(500).body("Room code generation failed");
+        }
+        return ResponseEntity.ok(roomCode);
     }
 
     // Check if the user is already in a room?
     @GetMapping("/join/{roomCode}")
-    public ResponseEntity<?> joinRoom(@PathVariable String roomCode, Principal principal) {
+    public ResponseEntity<?> joinRoom(@PathVariable @NotBlank String roomCode, Principal principal) {
 
         if (canNotQuery(principal)) {
             return ResponseEntity.status(409).body("User already in a room");

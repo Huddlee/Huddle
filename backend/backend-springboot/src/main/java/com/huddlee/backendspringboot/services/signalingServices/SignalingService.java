@@ -68,6 +68,11 @@ public class SignalingService {
 
             // Is there any space in the room?
             if (room.getUsers().size() < MAX_PEERS) {
+                // persist the room if there were no user before
+                if (room.getUsers().isEmpty()) {
+                    roomRegistry.persistRoom(roomCode);
+                }
+
                 String uid = roomRegistry.sidToUid(session.getId());
 
                 // Add the user into the room

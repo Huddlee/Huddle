@@ -1,4 +1,4 @@
-package com.huddlee.backendspringboot.security.jwt;
+package com.huddlee.backendspringboot.jwt;
 
 import com.huddlee.backendspringboot.services.userServices.UserDetailImpl;
 import io.jsonwebtoken.Jwts;

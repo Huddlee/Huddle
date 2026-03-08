@@ -4,8 +4,11 @@ import com.huddlee.backendspringboot.dtos.LoginRequest;
 import com.huddlee.backendspringboot.dtos.RegisterRequest;
 import com.huddlee.backendspringboot.models.User;
 import com.huddlee.backendspringboot.services.userServices.UserService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,19 +24,13 @@ public class AuthController {
 
     private final UserService userService;
 
-    @Value("${guest.user.password}")
-    private String guestPassword;
-
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<?> login(@RequestBody @Valid LoginRequest loginRequest) {
         return ResponseEntity.ok(userService.login(loginRequest));
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest registerRequest) {
-
-        // verify that none of the fields is null
-
+    public ResponseEntity<?> register(@RequestBody @Valid RegisterRequest registerRequest) {
         User user = new User();
         user.setUsername(registerRequest.getUsername());
         user.setPassword(registerRequest.getPassword());
@@ -50,15 +47,16 @@ public class AuthController {
     
     @PostMapping("/guest/register")
     public ResponseEntity<?> guestRegister() {
+        // future: use client ip address to limit the number of guest accounts
+
         String guestId = "guest_" + UUID.randomUUID();
         User user = new User();
 
         user.setUsername(guestId);
-        user.setPassword(guestPassword);
         user.setDisplayName(user.getUsername());
         user.setRole("GUEST");
 
-        userService.register(user);
+        userService.registerGuest(user);
         return ResponseEntity.ok(userService.guestLogin(guestId));
     }
 }

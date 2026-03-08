@@ -10,6 +10,7 @@ import org.springframework.web.socket.WebSocketSession;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -40,8 +41,16 @@ public class RoomRegistry {
     private int codeLen;
     @Value("${room.code.charset}")
     private String charSet;
+    @Value("${room.code.attempts}")
+    private int attempts;
+    @Value("${room.expiration.time}")
+    private long expirationTime;
+    @Value("${room.expiration.time.unit}")
+    private TimeUnit expirationTimeUnit;
 
-    public String generateRoomCode(){
+
+    public String generateRoomCode(int attempt){
+        if (attempt > attempts) return null;
         StringBuilder roomCode = new StringBuilder();
 
         while (roomCode.length() < codeLen)
@@ -49,10 +58,10 @@ public class RoomRegistry {
 
         // regenerate if the rc is a duplicate that is already present
         if(RcToRoom.hasKey(rc2r + roomCode))
-            return generateRoomCode();
+            return generateRoomCode(attempt + 1);
 
         Room room = new Room(roomCode.toString(), new ArrayList<>());
-        RcToRoom.opsForValue().set(rc2r + roomCode, room);
+        RcToRoom.opsForValue().set(rc2r + roomCode, room, expirationTime, expirationTimeUnit);
         return roomCode.toString();
     }
 
@@ -107,6 +116,14 @@ public class RoomRegistry {
         RcToRoom.opsForValue().set(rc2r + room.getRoomCode(), room);
     }
 
+    public boolean persistRoom(String roomCode){
+        return RcToRoom.persist(rc2r + roomCode);
+    }
+
+    public boolean setExpiration(String roomCode){
+        return RcToRoom.expire(rc2r + roomCode, expirationTime, expirationTimeUnit);
+    }
+
     public void saveUidToRc(String uid, String rc){
         uidToRc.opsForValue().set(u2rc + uid, rc);
     }
@@ -126,7 +143,11 @@ public class RoomRegistry {
 
         if (room != null){
             room.getUsers().remove(uid);
-            RcToRoom.opsForValue().set(rc2r + uidToRc.opsForValue().get(u2rc + uid), room);
+
+            RcToRoom.opsForValue().set(rc2r + rc, room);
+            if (room.getUsers().isEmpty()) {
+                setExpiration(rc);
+            }
         }
 
         uidToSid.delete(u2s + uid);

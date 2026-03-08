@@ -1,4 +1,4 @@
-package com.huddlee.backendspringboot.security.jwt;
+package com.huddlee.backendspringboot.jwt;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

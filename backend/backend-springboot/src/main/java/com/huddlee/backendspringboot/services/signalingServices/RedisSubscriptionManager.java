@@ -1,5 +1,7 @@
 package com.huddlee.backendspringboot.services.signalingServices;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,6 +37,8 @@ public class RedisSubscriptionManager {
     }
 
     public void unsubscribeFromRoom(String roomCode) {
+        if (roomCode == null || roomCode.isBlank()) return;
+
         localRoomCount.computeIfPresent(roomCode, (key, count) -> {
             if (count <= 1) {
                 // Last local user left -> Unsubscribe from the Redis channel

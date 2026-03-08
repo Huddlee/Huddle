@@ -1,7 +1,8 @@
 package com.huddlee.backendspringboot.config;
 
-import com.huddlee.backendspringboot.security.jwt.JwtAuthFilter;
-import com.huddlee.backendspringboot.security.jwt.JwtUtils;
+import com.huddlee.backendspringboot.jwt.JwtAuthFilter;
+import com.huddlee.backendspringboot.jwt.JwtUtils;
+import com.huddlee.backendspringboot.services.signalingServices.UserHandshakeInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -70,6 +71,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         .anyRequest().authenticated()
                 )

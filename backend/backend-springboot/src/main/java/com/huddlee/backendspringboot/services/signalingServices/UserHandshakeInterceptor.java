@@ -1,6 +1,6 @@
-package com.huddlee.backendspringboot.config;
+package com.huddlee.backendspringboot.services.signalingServices;
 
-import com.huddlee.backendspringboot.security.jwt.JwtUtils;
+import com.huddlee.backendspringboot.jwt.JwtUtils;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
@@ -57,10 +57,6 @@ public class UserHandshakeInterceptor implements HandshakeInterceptor {
             return true;
         }
         return false;
-    }
-
-    private String getTokenFromQuery(String query) {
-        return query.split("=")[1];
     }
 
     @Override
