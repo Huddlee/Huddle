@@ -34,40 +34,8 @@ This is a monorepo containing the frontend and backend applications.
 
 Huddle is designed to maximize privacy by minimizing the server's role. Below is the system architecture detailing how the client interacts with the backend services:
 
-```mermaid
-graph TD
-    %% Define Client
-    Client[Client / React Application]
+![Huddle System Architecture](./assets/architecture.jpg)
 
-    %% Define Backend System
-    subgraph Docker ["Docker Environment (huddle-backend)"]
-        subgraph SpringBoot ["Spring Boot Application (Java 21)"]
-            Auth["Security Layer<br/>(Spring Security + JWT)"]
-            RestAPI["REST API<br/>(Spring WebMVC)"]
-            Signaling["WebSocket Handler<br/>(Real-time Signaling)"]
-            
-            RestAPI -->|Validates via| Auth
-            Signaling -->|Validates via| Auth
-        end
-    end
-
-    %% Define Data Layer
-    subgraph DataLayer ["Data Storage Layer"]
-        MongoDB[("MongoDB<br/>(Primary Database)")]
-        Redis[("Redis<br/>(Pub/Sub & Caching)")]
-    end
-
-    %% Relationships / Data Flow
-    Client -->|HTTPS Request<br/>Login / Room Creation| RestAPI
-    Client <-->|WebSocket wss://<br/>Real-time Communication| Signaling
-    
-    RestAPI -->|Read/Write<br/>User & Room Data| MongoDB
-    Signaling <-->|Publish/Subscribe<br/>Signaling Channels| Redis
-    
-    %% Styling
-    classDef storage fill:#f9f9f9,stroke:#333,stroke-width:2px;
-    class MongoDB,Redis storage;
-```
 
 ### Connection Flow
 1.  **Authentication:** A user logs in or registers (as a standard or guest user) with the Spring Boot backend and receives a JSON Web Token (JWT).
