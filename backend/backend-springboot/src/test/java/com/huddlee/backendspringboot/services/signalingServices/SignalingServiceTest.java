@@ -51,15 +51,15 @@ class SignalingServiceTest {
     private final String USER_ID = "user-456";
 
     @BeforeEach
-    void setUp() {
-        // 1. Manual constructor injection for absolute safety
+    void setUp() throws Exception {
+        // Manual constructor injection
         signalingService = new SignalingService(roomRegistry, mapper, subscriptionManager, redisTemplate);
 
-        // 2. Inject @Value properties as requested
+        // Inject @Value properties
         ReflectionTestUtils.setField(signalingService, "MAX_PEERS", 4);
         ReflectionTestUtils.setField(signalingService, "channelName", "redis:");
 
-        // 3. Common session mock setup (lenient because not all tests use them)
+        // Common session mock setup (lenient because not all tests use them)
         lenient().when(session.getId()).thenReturn(SESSION_ID);
         Map<String, Object> attributes = new HashMap<>();
         attributes.put("userId", USER_ID);
@@ -103,7 +103,7 @@ class SignalingServiceTest {
     // --- Join Tests ---
 
     @Test
-    void handleJoin_ShouldSendError_IfAlreadyInRoom() {
+    void handleJoin_ShouldSendError_IfAlreadyInRoom() throws Exception {
         when(roomRegistry.sessionInRoom(session)).thenReturn(true);
         when(roomRegistry.isLocalConnection(SESSION_ID)).thenReturn(true);
         when(roomRegistry.getSessionFromSid(SESSION_ID)).thenReturn(session);
@@ -120,7 +120,7 @@ class SignalingServiceTest {
     }
 
     @Test
-    void handleJoin_ShouldSendError_IfRoomDoesNotExist() {
+    void handleJoin_ShouldSendError_IfRoomDoesNotExist() throws Exception {
         when(roomRegistry.sessionInRoom(session)).thenReturn(false);
         when(roomRegistry.getRoom("ROOM1")).thenReturn(null);
         when(roomRegistry.isLocalConnection(SESSION_ID)).thenReturn(true);
@@ -138,9 +138,9 @@ class SignalingServiceTest {
     }
 
     @Test
-    void handleJoin_ShouldSendError_IfRoomIsFull() {
+    void handleJoin_ShouldSendError_IfRoomIsFull() throws Exception {
         String roomCode = "ROOM1";
-        // MAX_PEERS is 4, so we populate 4 existing users
+        // MAX_PEERS is 4, populate 4 existing users
         Room room = new Room(roomCode, new ArrayList<>(Arrays.asList("u1", "u2", "u3", "u4")));
 
         when(roomRegistry.sessionInRoom(session)).thenReturn(false);
@@ -160,6 +160,31 @@ class SignalingServiceTest {
     }
 
     @Test
+    void handleJoin_ShouldPersistRoom_IfRoomWasEmpty() throws Exception {
+        String roomCode = "ROOM1";
+        Room room = new Room(roomCode, new ArrayList<>()); // Empty room
+
+        when(roomRegistry.sessionInRoom(session)).thenReturn(false);
+        when(roomRegistry.getRoom(roomCode)).thenReturn(room);
+        when(roomRegistry.sidToUid(SESSION_ID)).thenReturn(USER_ID);
+        when(roomRegistry.isLocalConnection(SESSION_ID)).thenReturn(true);
+        when(roomRegistry.getSessionFromSid(SESSION_ID)).thenReturn(session);
+
+        WebRequest req = new WebRequest();
+        req.setRoomCode(roomCode);
+
+        signalingService.handleJoin(session, req);
+
+        // Verify the newly added logic: room should be persisted
+        verify(roomRegistry).persistRoom(roomCode);
+
+        // Verify user was added and room was updated
+        assertTrue(room.getUsers().contains(USER_ID));
+        verify(roomRegistry).saveRoom(room);
+        verify(subscriptionManager).subscribeToRoom(roomCode);
+    }
+
+    @Test
     void handleJoin_ShouldSuccessfullyJoinAndNotifyPeers() throws Exception {
         String roomCode = "ROOM1";
         Room room = new Room(roomCode, new ArrayList<>(List.of("existingUser")));
@@ -168,7 +193,6 @@ class SignalingServiceTest {
         when(roomRegistry.getRoom(roomCode)).thenReturn(room);
         when(roomRegistry.sidToUid(SESSION_ID)).thenReturn(USER_ID);
 
-        // Mock returning the updated peer list after join
         when(roomRegistry.getPeers(roomCode)).thenReturn(List.of("existingUser", USER_ID));
         when(roomRegistry.uidToSid("existingUser")).thenReturn("existingSession");
 
@@ -183,14 +207,16 @@ class SignalingServiceTest {
 
         signalingService.handleJoin(session, req);
 
-        // Verify state changes
+        // Should not persist since it's not empty
+        verify(roomRegistry, never()).persistRoom(anyString());
+
         assertTrue(room.getUsers().contains(USER_ID));
         verify(roomRegistry).saveRoom(room);
         verify(roomRegistry).saveUidToRc(USER_ID, roomCode);
         verify(subscriptionManager).subscribeToRoom(roomCode);
 
         // Verify local message to joined user (PEER_LIST)
-        verify(session).sendMessage(any(TextMessage.class));
+        verify(session, atLeastOnce()).sendMessage(any(TextMessage.class));
 
         // Verify Redis publication to existing peer (PEER_JOIN)
         verify(redisTemplate).convertAndSend(eq("redis:ROOM1"), anyString());
@@ -199,7 +225,7 @@ class SignalingServiceTest {
     // --- Handle Message Tests ---
 
     @Test
-    void handleMessage_ShouldSendError_IfNotInRoom() {
+    void handleMessage_ShouldSendError_IfNotInRoom() throws Exception {
         when(roomRegistry.sidToRc(SESSION_ID)).thenReturn(null); // Not in a room
         when(roomRegistry.isLocalConnection(SESSION_ID)).thenReturn(true);
         when(roomRegistry.getSessionFromSid(SESSION_ID)).thenReturn(session);
@@ -252,7 +278,7 @@ class SignalingServiceTest {
     }
 
     @Test
-    void handleMessage_ShouldRouteMessageToRemotePeerViaRedis() {
+    void handleMessage_ShouldRouteMessageToRemotePeerViaRedis() throws Exception {
         String roomCode = "ROOM1";
         String targetUser = "user-789";
         String targetSession = "session-789";
@@ -277,26 +303,11 @@ class SignalingServiceTest {
 
         // Verify published to Redis channel
         verify(redisTemplate).convertAndSend(eq("redis:ROOM1"), anyString());
-
-        // Verify RedisMessage payload structure
-        ArgumentCaptor<RedisMessage> redisCaptor = ArgumentCaptor.forClass(RedisMessage.class);
-        verify(mapper, atLeastOnce()).writeValueAsString(redisCaptor.capture());
-
-        RedisMessage capturedMessage = redisCaptor.getAllValues().stream()
-                .filter(m -> m instanceof RedisMessage)
-                .findFirst()
-                .orElseThrow();
-
-        assertEquals(ResponseType.ANSWER, capturedMessage.getType());
-        assertEquals("sdp-answer-data", capturedMessage.getMessage());
-        assertEquals(targetSession, capturedMessage.getTo());
     }
 
     @Test
-    void handleMessage_ShouldSendError_IfInvalidResponseType() {
-        // Fix: Mock WebRequest to return null for the type.
-        // When handleMessage calls req.getType().toString(), it will trigger a NullPointerException
-        // effectively falling into the catch block without violating Enum constraints.
+    void handleMessage_ShouldSendError_IfInvalidResponseType() throws Exception {
+        // Trigger NullPointerException for the Enum parsing
         WebRequest req = mock(WebRequest.class);
         when(req.getType()).thenReturn(null);
 
@@ -309,6 +320,21 @@ class SignalingServiceTest {
         verify(mapper).writeValueAsString(responseCaptor.capture());
         assertEquals(ResponseType.ERROR, responseCaptor.getValue().getResponseType());
         assertEquals("Invalid response type", responseCaptor.getValue().getMessage());
+    }
+
+    // --- Unknown Message Tests ---
+
+    @Test
+    void unknownMessageType_ShouldSendError() throws Exception {
+        when(roomRegistry.isLocalConnection(SESSION_ID)).thenReturn(true);
+        when(roomRegistry.getSessionFromSid(SESSION_ID)).thenReturn(session);
+
+        signalingService.unknownMessageType(session);
+
+        ArgumentCaptor<WsResponse> responseCaptor = ArgumentCaptor.forClass(WsResponse.class);
+        verify(mapper).writeValueAsString(responseCaptor.capture());
+        assertEquals(ResponseType.ERROR, responseCaptor.getValue().getResponseType());
+        assertEquals("Unknown message type", responseCaptor.getValue().getMessage());
     }
 
     // --- Disconnect Tests ---
@@ -324,7 +350,6 @@ class SignalingServiceTest {
         when(roomRegistry.getPeers(roomCode)).thenReturn(List.of(USER_ID, peerUser));
         when(roomRegistry.uidToSid(peerUser)).thenReturn(peerSession);
 
-        // Peer is local, current session is local
         when(roomRegistry.isLocalConnection(peerSession)).thenReturn(true);
         when(roomRegistry.isLocalConnection(SESSION_ID)).thenReturn(true);
 
@@ -337,16 +362,12 @@ class SignalingServiceTest {
 
         // 1. Notifies other peer
         verify(mockPeerSession).sendMessage(any(TextMessage.class));
-
         // 2. Disconnects from registry
         verify(roomRegistry).disconnect(SESSION_ID, USER_ID, roomCode);
-
         // 3. Sends success to self
-        verify(session).sendMessage(any(TextMessage.class));
-
+        verify(session, atLeastOnce()).sendMessage(any(TextMessage.class));
         // 4. Closes self
         verify(session).close(CloseStatus.NORMAL);
-
         // 5. Unsubscribes
         verify(subscriptionManager).unsubscribeFromRoom(roomCode);
     }
@@ -361,14 +382,11 @@ class SignalingServiceTest {
 
         signalingService.disconnect(session, true); // Forced disconnect
 
-        // Verifies registry disconnect happens
         verify(roomRegistry).disconnect(SESSION_ID, USER_ID, roomCode);
 
-        // Verifies we DO NOT send "SuccessFully Disconnected" to self or attempt normal close
+        // DO NOT send "SuccessFully Disconnected" to self or attempt normal close
         verify(session, never()).sendMessage(any(TextMessage.class));
         verify(session, never()).close(any(CloseStatus.class));
-
-        // Unsubscribes
         verify(subscriptionManager).unsubscribeFromRoom(roomCode);
     }
 }

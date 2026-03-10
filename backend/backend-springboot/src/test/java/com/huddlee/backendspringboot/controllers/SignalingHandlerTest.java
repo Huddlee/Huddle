@@ -9,9 +9,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.PingMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
 
 import static org.mockito.Mockito.*;
 
@@ -31,13 +34,12 @@ class SignalingHandlerTest {
 
     @BeforeEach
     void setUp() {
-        // Manual constructor injection
         signalingHandler = new SignalingHandler(signalingService, mapper);
         lenient().when(session.getId()).thenReturn("session-123");
     }
 
     @Test
-    void afterConnectionEstablished_ShouldCallOnConnection() {
+    void afterConnectionEstablished_ShouldCallOnConnectionAndAddToActiveSessions() {
         signalingHandler.afterConnectionEstablished(session);
 
         verify(signalingService, times(1)).onConnection(session);
@@ -84,15 +86,11 @@ class SignalingHandlerTest {
 
     @Test
     void handleTextMessage_ShouldHandleUnknownType() throws Exception {
-        // Simulating a scenario where mapper maps to null or an unhandled enum (if you add one later)
         TextMessage textMessage = new TextMessage("{}");
-        WebRequest req = new WebRequest(); // null type
+        WebRequest req = new WebRequest();
 
-        // Note: Using a lenient mock or specific setup if you have a default unknown enum
         when(mapper.readValue(textMessage.getPayload(), WebRequest.class)).thenReturn(req);
 
-        // We catch the NullPointerException from req.getType() to test the default block,
-        // or you can just add an UNKNOWN enum type to MessageType. Assuming null triggers default logic:
         try {
             signalingHandler.handleTextMessage(session, textMessage);
         } catch (NullPointerException e) {
@@ -101,9 +99,36 @@ class SignalingHandlerTest {
     }
 
     @Test
-    void afterConnectionClosed_ShouldCallDisconnectWithForcedTrue() throws Exception {
+    void afterConnectionClosed_ShouldCallDisconnectAndRemoveFromActiveSessions() throws Exception {
+        // First add the session
+        signalingHandler.afterConnectionEstablished(session);
+
         signalingHandler.afterConnectionClosed(session, CloseStatus.NORMAL);
 
         verify(signalingService, times(1)).disconnect(session, true);
+    }
+
+    @Test
+    void sendPingToAll_ShouldSendPingMessageToOpenSessions() throws IOException {
+        // Add session to active sessions
+        signalingHandler.afterConnectionEstablished(session);
+
+        when(session.isOpen()).thenReturn(true);
+
+        signalingHandler.sendPingToAll();
+
+        verify(session, times(1)).sendMessage(any(PingMessage.class));
+    }
+
+    @Test
+    void sendPingToAll_ShouldHandleIOExceptionGracefully() throws IOException {
+        signalingHandler.afterConnectionEstablished(session);
+        when(session.isOpen()).thenReturn(true);
+        doThrow(new IOException("Connection failed")).when(session).sendMessage(any(PingMessage.class));
+
+        // This should not throw an exception (caught and logged in the method)
+        signalingHandler.sendPingToAll();
+
+        verify(session, times(1)).sendMessage(any(PingMessage.class));
     }
 }

@@ -33,11 +33,13 @@ class RoomControllerTest {
     @BeforeEach
     void setUp() {
         RoomController roomController = new RoomController(roomRegistry);
+
+        // Inject the @Value annotated field for unit testing
         ReflectionTestUtils.setField(roomController, "secretSalt", SECRET_SALT);
 
         mockMvc = MockMvcBuilders.standaloneSetup(roomController).build();
 
-        // Calculate the exact UUID the controller will generate
+        // Accurately calculate the exact UUID the controller's canNotQuery method will generate
         expectedUid = String.valueOf(
                 UUID.nameUUIDFromBytes((USERNAME + SECRET_SALT).getBytes(StandardCharsets.UTF_8))
         );
@@ -65,8 +67,18 @@ class RoomControllerTest {
         when(roomRegistry.uidInSession(expectedUid)).thenReturn(true);
 
         mockMvc.perform(get("/api/room/create").principal(getMockPrincipal()))
-                .andExpect(status().isConflict())
+                .andExpect(status().isConflict()) // 409 Conflict
                 .andExpect(content().string("User already in a room"));
+    }
+
+    @Test
+    void createRoom_ShouldReturn500_WhenRoomCodeGenerationFails() throws Exception {
+        when(roomRegistry.uidInSession(expectedUid)).thenReturn(false);
+        when(roomRegistry.generateRoomCode(1)).thenReturn(null);
+
+        mockMvc.perform(get("/api/room/create").principal(getMockPrincipal()))
+                .andExpect(status().isInternalServerError()) // 500
+                .andExpect(content().string("Room code generation failed"));
     }
 
     // --- Join Room Tests ---
@@ -85,9 +97,10 @@ class RoomControllerTest {
 
     @Test
     void joinRoom_ShouldReturn409_WhenUserAlreadyInSession() throws Exception {
+        String roomCode = "ROOM12";
         when(roomRegistry.uidInSession(expectedUid)).thenReturn(true);
 
-        mockMvc.perform(get("/api/room/join/ROOM12").principal(getMockPrincipal()))
+        mockMvc.perform(get("/api/room/join/{roomCode}", roomCode).principal(getMockPrincipal()))
                 .andExpect(status().isConflict())
                 .andExpect(content().string("User already in a room"));
     }
@@ -99,7 +112,7 @@ class RoomControllerTest {
         when(roomRegistry.roomExists(roomCode)).thenReturn(false);
 
         mockMvc.perform(get("/api/room/join/{roomCode}", roomCode).principal(getMockPrincipal()))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound()); // 404 Not Found
     }
 
     @Test
@@ -107,10 +120,10 @@ class RoomControllerTest {
         String roomCode = "ROOM12";
         when(roomRegistry.uidInSession(expectedUid)).thenReturn(false);
         when(roomRegistry.roomExists(roomCode)).thenReturn(true);
-        when(roomRegistry.canJoin(roomCode)).thenReturn(false); // Room is full
+        when(roomRegistry.canJoin(roomCode)).thenReturn(false); // Simulates full room
 
         mockMvc.perform(get("/api/room/join/{roomCode}", roomCode).principal(getMockPrincipal()))
-                .andExpect(status().isConflict())
+                .andExpect(status().isConflict()) // 409 Conflict
                 .andExpect(content().string("Room is full"));
     }
 }

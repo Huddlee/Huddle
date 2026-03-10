@@ -13,7 +13,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -33,13 +32,10 @@ class AuthControllerTest {
     private UserService userService;
 
     private final ObjectMapper mapper = new ObjectMapper();
-    private final String GUEST_PASSWORD = "guest-secret-password";
 
     @BeforeEach
     void setUp() {
         AuthController authController = new AuthController(userService);
-        ReflectionTestUtils.setField(authController, "guestPassword", GUEST_PASSWORD);
-
         mockMvc = MockMvcBuilders.standaloneSetup(authController).build();
     }
 
@@ -90,6 +86,7 @@ class AuthControllerTest {
         RegisterRequest req = new RegisterRequest();
         req.setUsername("existinguser");
         req.setPassword("pass123");
+        req.setEmail("email@email.com");
 
         // Service returns null when user exists
         when(userService.register(any(User.class))).thenReturn(null);
@@ -112,13 +109,14 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").value("guest-jwt-token"));
 
-        // Verify the user details passed to the register method
+        // Verify the user details passed to the registerGuest method
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-        verify(userService).register(userCaptor.capture());
+
+        // Updated to verify registerGuest instead of register
+        verify(userService).registerGuest(userCaptor.capture());
 
         User registeredGuest = userCaptor.getValue();
         assertTrue(registeredGuest.getUsername().startsWith("guest_"));
         assertEquals("GUEST", registeredGuest.getRole());
-        assertEquals(GUEST_PASSWORD, registeredGuest.getPassword());
     }
 }

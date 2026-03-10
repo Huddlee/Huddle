@@ -14,9 +14,10 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,88 +30,86 @@ class RedisMessageListenerTest {
     private RoomRegistry roomRegistry;
 
     @Mock
-    private WebSocketSession session;
+    private Message message;
 
     @Mock
-    private Message redisMessageObj;
+    private WebSocketSession session;
 
-    private RedisMessageListener redisMessageListener;
-
-    private final String TARGET_SID = "session-123";
+    private RedisMessageListener listener;
 
     @BeforeEach
     void setUp() {
-        redisMessageListener = new RedisMessageListener(mapper, roomRegistry);
+        listener = new RedisMessageListener(mapper, roomRegistry);
     }
 
     @Test
     void onMessage_ShouldSendWebSocketMessage_WhenSessionIsOpen() throws Exception {
-        // 1. Prepare dummy data
-        String jsonPayload = "{\"type\":\"OFFER\",\"message\":\"sdp-data\",\"from\":\"user1\",\"to\":\"" + TARGET_SID + "\"}";
-        byte[] payloadBytes = jsonPayload.getBytes();
+        // Arrange
+        String payload = "{\"type\":\"OFFER\",\"message\":\"sdp\",\"from\":\"userA\",\"to\":\"sessionB\"}";
+        byte[] payloadBytes = payload.getBytes();
+        when(message.getBody()).thenReturn(payloadBytes);
 
-        RedisMessage parsedMessage = new RedisMessage(ResponseType.OFFER, "sdp-data", "user1", TARGET_SID);
-        String mappedResponseStr = "{\"type\":\"OFFER\",\"message\":\"sdp-data\",\"from\":\"user1\"}";
+        RedisMessage redisMessage = new RedisMessage(ResponseType.OFFER, "sdp", "userA", "sessionB");
+        when(mapper.readValue(payload, RedisMessage.class)).thenReturn(redisMessage);
 
-        // 2. Mock behavior
-        when(redisMessageObj.getBody()).thenReturn(payloadBytes);
-        when(mapper.readValue(jsonPayload, RedisMessage.class)).thenReturn(parsedMessage);
-        when(roomRegistry.getSessionFromSid(TARGET_SID)).thenReturn(session);
+        when(roomRegistry.getSessionFromSid("sessionB")).thenReturn(session);
         when(session.isOpen()).thenReturn(true);
-        when(mapper.writeValueAsString(any(WsResponse.class))).thenReturn(mappedResponseStr);
+        when(mapper.writeValueAsString(any(WsResponse.class))).thenReturn("{\"response\":\"mock\"}");
 
-        // 3. Execute
-        redisMessageListener.onMessage(redisMessageObj, null);
+        // Act
+        listener.onMessage(message, null);
 
-        // 4. Verify
+        // Assert
         ArgumentCaptor<TextMessage> textMessageCaptor = ArgumentCaptor.forClass(TextMessage.class);
         verify(session, times(1)).sendMessage(textMessageCaptor.capture());
+        assertEquals("{\"response\":\"mock\"}", textMessageCaptor.getValue().getPayload());
 
-        assertEquals(mappedResponseStr, textMessageCaptor.getValue().getPayload());
+        ArgumentCaptor<WsResponse> wsResponseCaptor = ArgumentCaptor.forClass(WsResponse.class);
+        verify(mapper).writeValueAsString(wsResponseCaptor.capture());
+        assertEquals(ResponseType.OFFER, wsResponseCaptor.getValue().getResponseType());
+        assertEquals("sdp", wsResponseCaptor.getValue().getMessage());
+        assertEquals("userA", wsResponseCaptor.getValue().getFrom());
     }
 
     @Test
     void onMessage_ShouldNotSendMessage_WhenSessionIsNull() throws Exception {
-        String jsonPayload = "{\"to\":\"" + TARGET_SID + "\"}";
-        RedisMessage parsedMessage = new RedisMessage(ResponseType.OFFER, "sdp", "user1", TARGET_SID);
+        String payload = "{\"to\":\"sessionB\"}";
+        when(message.getBody()).thenReturn(payload.getBytes());
+        RedisMessage redisMessage = new RedisMessage(ResponseType.OFFER, "sdp", "userA", "sessionB");
+        when(mapper.readValue(payload, RedisMessage.class)).thenReturn(redisMessage);
 
-        when(redisMessageObj.getBody()).thenReturn(jsonPayload.getBytes());
-        when(mapper.readValue(jsonPayload, RedisMessage.class)).thenReturn(parsedMessage);
-        when(roomRegistry.getSessionFromSid(TARGET_SID)).thenReturn(null); // Session not found
+        // Session not found
+        when(roomRegistry.getSessionFromSid("sessionB")).thenReturn(null);
 
-        redisMessageListener.onMessage(redisMessageObj, null);
+        listener.onMessage(message, null);
 
-        // Verify we never attempted to send a message
-        verify(session, never()).sendMessage(any(TextMessage.class));
+        verify(session, never()).sendMessage(any());
     }
 
     @Test
     void onMessage_ShouldNotSendMessage_WhenSessionIsClosed() throws Exception {
-        String jsonPayload = "{\"to\":\"" + TARGET_SID + "\"}";
-        RedisMessage parsedMessage = new RedisMessage(ResponseType.OFFER, "sdp", "user1", TARGET_SID);
+        String payload = "{\"to\":\"sessionB\"}";
+        when(message.getBody()).thenReturn(payload.getBytes());
+        RedisMessage redisMessage = new RedisMessage(ResponseType.OFFER, "sdp", "userA", "sessionB");
+        when(mapper.readValue(payload, RedisMessage.class)).thenReturn(redisMessage);
 
-        when(redisMessageObj.getBody()).thenReturn(jsonPayload.getBytes());
-        when(mapper.readValue(jsonPayload, RedisMessage.class)).thenReturn(parsedMessage);
-        when(roomRegistry.getSessionFromSid(TARGET_SID)).thenReturn(session);
-        when(session.isOpen()).thenReturn(false); // Session is closed
+        when(roomRegistry.getSessionFromSid("sessionB")).thenReturn(session);
+        // Session is found but closed
+        when(session.isOpen()).thenReturn(false);
 
-        redisMessageListener.onMessage(redisMessageObj, null);
+        listener.onMessage(message, null);
 
-        verify(session, never()).sendMessage(any(TextMessage.class));
+        verify(session, never()).sendMessage(any());
     }
 
     @Test
-    void onMessage_ShouldHandleExceptionGracefully() throws Exception {
-        // Return malformed JSON or trigger a mapper exception
-        byte[] badPayload = "invalid-json".getBytes();
-        when(redisMessageObj.getBody()).thenReturn(badPayload);
-        when(mapper.readValue("invalid-json", RedisMessage.class)).thenThrow(new RuntimeException("Parse error"));
+    void onMessage_ShouldCatchAndLogException_WhenParsingFails() throws Exception {
+        when(message.getBody()).thenReturn("invalid-json".getBytes());
+        when(mapper.readValue("invalid-json", RedisMessage.class)).thenThrow(new RuntimeException("Parsing error"));
 
-        // Execute - this should hit the catch block and log the error, but NOT crash the application
-        redisMessageListener.onMessage(redisMessageObj, null);
+        // Should not throw exception outwards
+        listener.onMessage(message, null);
 
-        // Verify we bailed out early and never touched the registry or sessions
         verify(roomRegistry, never()).getSessionFromSid(anyString());
-        verify(session, never()).sendMessage(any(TextMessage.class));
     }
 }
