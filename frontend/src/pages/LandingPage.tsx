@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import LiquidEther from '../components/LiquidEther/LiquidEther';
 import { guestLogin } from '../utils/api';
 import Toast from '../components/Toast';
+
+const ETHER_COLORS = ['#5227FF', '#FF9FFC', '#B497CF'];
 
 const LandingPage: React.FC = () => {
     const [loading, setLoading] = useState(false);
@@ -23,23 +26,40 @@ const LandingPage: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-black flex flex-col items-center justify-center text-white p-6 relative overflow-hidden">
+        <div className="min-h-screen bg-[#0A0A0B] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-[#0A0A0B] to-[#0A0A0B] flex flex-col items-center justify-center text-white p-6 relative overflow-hidden">
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <LiquidEther
+                    colors={ETHER_COLORS}
+                    mouseForce={20}
+                    cursorSize={100}
+                    isViscous={false}
+                    viscous={30}
+                    iterationsViscous={32}
+                    iterationsPoisson={32}
+                    resolution={0.5}
+                    isBounce={false}
+                    autoDemo={true}
+                    autoSpeed={0.5}
+                    autoIntensity={2.2}
+                    takeoverDuration={0.25}
+                    autoResumeDelay={3000}
+                    autoRampDuration={0.6}
+                />
+            </div>
+            {/* Subtle Grid Background */}
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
+
             {error && <Toast message={error} type="error" onClose={() => setError(null)} />}
 
-            {/* Abstract Background Shapes */}
-            <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-            <div className="absolute top-[20%] right-[-10%] w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-            <div className="absolute bottom-[-10%] left-[20%] w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
-
-            <div className="z-10 bg-white/10 backdrop-blur-xl border border-white/20 p-10 rounded-3xl shadow-2xl flex flex-col items-center max-w-md w-full transition-transform hover:scale-[1.02] duration-300">
+            <div className="z-10 bg-transparent backdrop-blur-xl border border-white/10 p-10 rounded-3xl shadow-2xl flex flex-col items-center max-w-md w-full transition-transform hover:scale-[1.02] duration-300">
                 <div className="mb-8 p-4 bg-white/5 rounded-full ring-1 ring-white/20 shadow-inner">
                     <svg className="w-16 h-16 text-indigo-400 drop-shadow-[0_0_10px_rgba(99,102,241,0.5)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                     </svg>
                 </div>
 
-                <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 to-pink-200">
-                    Huddle.
+                <h1 className="text-7xl md:text-8xl font-extrabold tracking-tight mb-4 text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 to-pink-200">
+                    Huddle
                 </h1>
                 <p className="text-lg text-indigo-100/70 mb-10 text-center font-medium">
                     Connect instantly. No friction, pure collaboration.
@@ -49,7 +69,7 @@ const LandingPage: React.FC = () => {
                     id="landing-guest"
                     onClick={handleJoinAsGuest}
                     disabled={loading}
-                    className="group relative w-full flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-semibold text-lg py-4 px-8 rounded-2xl shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(99,102,241,0.6)] transition-all duration-300 ease-out active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="group relative w-full flex items-center justify-center gap-3 bg-black hover:bg-gray-900 border border-white/10 text-white font-semibold text-lg py-4 px-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 ease-out active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                     {loading ? (
                         <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

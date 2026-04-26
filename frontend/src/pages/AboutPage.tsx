@@ -1,11 +1,20 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import Silk from '../components/Silk/Silk';
 
 const AboutPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-[#0A0A0B] text-white font-sans relative">
-            {/* Subtle Grid Background */}
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
+            {/* Silk Background */}
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <Silk
+                    speed={5}
+                    scale={1}
+                    color="#1C1C1E"
+                    noiseIntensity={1.5}
+                    rotation={0}
+                />
+            </div>
 
             {/* Nav */}
             <nav className="z-10 relative w-full px-8 py-6 flex items-center justify-between">
@@ -154,7 +163,7 @@ const AboutPage: React.FC = () => {
                 <div className="text-center pt-4 pb-12">
                     <Link
                         to="/"
-                        className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-semibold text-lg py-4 px-8 rounded-2xl shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(99,102,241,0.6)] transition-all duration-300 active:scale-95"
+                        className="inline-flex items-center gap-2 bg-black hover:bg-gray-900 border border-white/10 text-white font-semibold text-lg py-4 px-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 active:scale-95"
                     >
                         Start a Private Session
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

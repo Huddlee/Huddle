@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import LiquidEther from '../components/LiquidEther/LiquidEther';
 import { loginUser } from '../utils/api';
 import Toast from '../components/Toast';
+
+const ETHER_COLORS = ['#5227FF', '#FF9FFC', '#B497CF'];
 
 const LoginPage: React.FC = () => {
     const [username, setUsername] = useState('');
@@ -32,13 +35,29 @@ const LoginPage: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-black flex flex-col items-center justify-center text-white p-6 relative overflow-hidden">
+        <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white p-6 relative overflow-hidden">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-            {/* Abstract Background Shapes */}
-            <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-            <div className="absolute top-[20%] right-[-10%] w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-            <div className="absolute bottom-[-10%] left-[20%] w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+            {/* Background */}
+            <div className="absolute inset-0 z-0">
+                <LiquidEther
+                    colors={ETHER_COLORS}
+                    mouseForce={20}
+                    cursorSize={100}
+                    isViscous={false}
+                    viscous={30}
+                    iterationsViscous={32}
+                    iterationsPoisson={32}
+                    resolution={0.5}
+                    isBounce={false}
+                    autoDemo={true}
+                    autoSpeed={0.5}
+                    autoIntensity={2.2}
+                    takeoverDuration={0.25}
+                    autoResumeDelay={3000}
+                    autoRampDuration={0.6}
+                />
+            </div>
 
             <div className="z-10 bg-white/10 backdrop-blur-xl border border-white/20 p-10 rounded-3xl shadow-2xl flex flex-col items-center max-w-md w-full transition-transform hover:scale-[1.02] duration-300">
                 <div className="mb-6 p-4 bg-white/5 rounded-full ring-1 ring-white/20 shadow-inner">
@@ -82,7 +101,7 @@ const LoginPage: React.FC = () => {
                         id="login-submit"
                         type="submit"
                         disabled={loading}
-                        className="group relative w-full flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-semibold text-lg py-4 px-8 rounded-2xl shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(99,102,241,0.6)] transition-all duration-300 ease-out active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+                        className="group relative w-full flex items-center justify-center gap-3 bg-black hover:bg-gray-900 border border-white/10 text-white font-semibold text-lg py-4 px-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 ease-out active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed mt-2"
                     >
                         {loading ? (
                             <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

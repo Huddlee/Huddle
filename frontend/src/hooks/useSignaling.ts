@@ -61,7 +61,8 @@ export const useSignaling = (roomCode: string | undefined) => {
         const connectWebSocket = () => {
             if (!isMounted) return;
 
-            const wsUrl = `ws://localhost:8080/ws?token=${token}`;
+            const backendWs = import.meta.env.VITE_BACKEND_WS_URL;
+            const wsUrl = `${backendWs}/ws?token=${token}`;
             console.log(`Attempting to connect to WebSocket: ${wsUrl}`);
             const ws = new WebSocket(wsUrl);
             wsRef.current = ws;

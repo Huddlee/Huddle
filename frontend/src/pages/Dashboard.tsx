@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { createRoom, joinRoom } from '../utils/api';
 import Toast from '../components/Toast';
 import { getOrCreateDisplayName, generateDisplayName } from '../utils/nameGenerator';
+import FloatingLines from '../components/FloatingLines/FloatingLines';
+import Loader from '../components/Loader/Loader';
+
+const ENABLED_WAVES = ['top', 'middle', 'bottom'];
+const LINE_COUNT = [10, 15, 20];
+const LINE_DISTANCE = [8, 6, 4];
 
 const Dashboard: React.FC = () => {
     const [roomCode, setRoomCode] = useState('');
@@ -10,7 +16,8 @@ const Dashboard: React.FC = () => {
     const [loadingJoin, setLoadingJoin] = useState(false);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     const [displayName, setDisplayName] = useState(getOrCreateDisplayName());
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem('huddle_token'));
+    const [isProcessingAction, setIsProcessingAction] = useState(() => !!sessionStorage.getItem('pending_action'));
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -30,11 +37,7 @@ const Dashboard: React.FC = () => {
 
 
 
-    const handleCreateRoom = async () => {
-        if (!isAuthenticated) {
-            navigate('/auth');
-            return;
-        }
+    const executeCreateRoom = async () => {
         try {
             setLoadingCreate(true);
             const token = localStorage.getItem('huddle_token');
@@ -45,9 +48,36 @@ const Dashboard: React.FC = () => {
         } catch (error) {
             console.error('Failed to create room', error);
             setToast({ message: 'Failed to create room. Please try again.', type: 'error' });
+            setIsProcessingAction(false);
         } finally {
             setLoadingCreate(false);
         }
+    };
+
+    const executeJoinRoom = async (code: string) => {
+        try {
+            setLoadingJoin(true);
+            const token = localStorage.getItem('huddle_token');
+            if (!token) throw new Error('No token found');
+            await joinRoom(code, token);
+            sessionStorage.setItem('active_room', code);
+            navigate(`/room/${code}`);
+        } catch (error) {
+            console.error('Failed to join room', error);
+            setToast({ message: 'Failed to join room. Please check the code and try again.', type: 'error' });
+            setIsProcessingAction(false);
+        } finally {
+            setLoadingJoin(false);
+        }
+    };
+
+    const handleCreateRoom = async () => {
+        if (!isAuthenticated) {
+            sessionStorage.setItem('pending_action', JSON.stringify({ type: 'create' }));
+            navigate('/auth');
+            return;
+        }
+        await executeCreateRoom();
     };
 
     const handleJoinRoom = async (e: React.FormEvent) => {
@@ -55,30 +85,77 @@ const Dashboard: React.FC = () => {
         const trimmedCode = roomCode.trim();
         if (!trimmedCode) return;
         if (!isAuthenticated) {
+            sessionStorage.setItem('pending_action', JSON.stringify({ type: 'join', roomCode: trimmedCode }));
             navigate('/auth');
             return;
         }
-        try {
-            setLoadingJoin(true);
-            const token = localStorage.getItem('huddle_token');
-            if (!token) throw new Error('No token found');
-            await joinRoom(trimmedCode, token);
-            sessionStorage.setItem('active_room', trimmedCode);
-            navigate(`/room/${trimmedCode}`);
-        } catch (error) {
-            console.error('Failed to join room', error);
-            setToast({ message: 'Failed to join room. Please check the code and try again.', type: 'error' });
-        } finally {
-            setLoadingJoin(false);
-        }
+        await executeJoinRoom(trimmedCode);
     };
+
+    const pendingActionHandled = useRef(false);
+
+    useEffect(() => {
+        if (isAuthenticated) {
+            if (pendingActionHandled.current) return;
+            
+            const pending = sessionStorage.getItem('pending_action');
+            if (pending) {
+                pendingActionHandled.current = true;
+                sessionStorage.removeItem('pending_action');
+                try {
+                    const action = JSON.parse(pending);
+                    if (action.type === 'create') {
+                        executeCreateRoom();
+                    } else if (action.type === 'join' && action.roomCode) {
+                        setRoomCode(action.roomCode);
+                        executeJoinRoom(action.roomCode);
+                    } else {
+                        setIsProcessingAction(false);
+                    }
+                } catch (e) {
+                    console.error('Failed to parse pending action', e);
+                    setIsProcessingAction(false);
+                }
+            } else {
+                setIsProcessingAction(false);
+            }
+        } else {
+            // Clear pending action if they return unauthenticated
+            if (sessionStorage.getItem('pending_action')) {
+                sessionStorage.removeItem('pending_action');
+            }
+            setIsProcessingAction(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthenticated]);
+
+    if (isProcessingAction && isAuthenticated) {
+        return (
+            <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center font-sans">
+                <div className="z-10 flex flex-col items-center">
+                    <Loader />
+                    <h2 className="mt-8 text-lg font-bold tracking-widest uppercase text-white/80">Connecting...</h2>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#0A0A0B] text-white flex flex-col font-sans relative">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-            {/* Subtle Grid Background */}
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
+            {/* Floating Lines Background */}
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <FloatingLines 
+                    enabledWaves={ENABLED_WAVES}
+                    lineCount={LINE_COUNT}
+                    lineDistance={LINE_DISTANCE}
+                    bendRadius={5.0}
+                    bendStrength={-0.5}
+                    interactive={true}
+                    parallax={true}
+                />
+            </div>
 
             {/* Top-left Huddle Logo */}
             <nav className="z-10 w-full px-8 py-6 flex items-center justify-between">
@@ -114,7 +191,7 @@ const Dashboard: React.FC = () => {
                             </button>
                             <button
                                 onClick={() => navigate('/register')}
-                                className="text-sm text-white font-medium px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 transition-all"
+                                className="text-sm text-white font-medium px-4 py-2 rounded-xl bg-black hover:bg-gray-900 border border-white/10 transition-all shadow-sm hover:shadow-md"
                             >
                                 Sign Up
                             </button>
@@ -170,7 +247,7 @@ const Dashboard: React.FC = () => {
                         <button
                             onClick={handleCreateRoom}
                             disabled={loadingCreate}
-                            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-3.5 px-6 rounded-xl transition-colors disabled:opacity-50 flex justify-center items-center h-[52px]"
+                            className="w-full bg-black hover:bg-gray-900 border border-white/10 text-white font-medium py-3.5 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center h-[52px]"
                         >
                             {loadingCreate ? (
                                 <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -203,7 +280,7 @@ const Dashboard: React.FC = () => {
                             <button
                                 type="submit"
                                 disabled={!roomCode.trim() || loadingJoin}
-                                className="bg-purple-600 hover:bg-purple-500 text-white font-medium px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center min-w-[80px]"
+                                className="bg-black hover:bg-gray-900 border border-white/10 text-white font-medium px-6 rounded-xl transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center min-w-[80px]"
                             >
                                 {loadingJoin ? (
                                     <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

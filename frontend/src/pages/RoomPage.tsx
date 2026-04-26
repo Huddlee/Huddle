@@ -272,17 +272,17 @@ const RoomPage: React.FC = () => {
 
 
     useEffect(() => {
-        const activeRoom = sessionStorage.getItem('active_room');
-        if (activeRoom !== roomCode) {
-            navigate('/');
-            return;
-        }
+        // const activeRoom = sessionStorage.getItem('active_room');
+        // if (activeRoom !== roomCode) {
+        //     navigate('/');
+        //     return;
+        // }
 
-        const token = localStorage.getItem('huddle_token');
-        if (!token) {
-            navigate('/');
-            return;
-        }
+        // const token = localStorage.getItem('huddle_token');
+        // if (!token) {
+        //     navigate('/');
+        //     return;
+        // }
 
         let isMounted = true;
 
@@ -461,11 +461,19 @@ const RoomPage: React.FC = () => {
             tileW = tileH * 16 / 9;
         }
 
-        return { width: Math.floor(tileW), height: Math.floor(tileH) };
+        return { width: Math.floor(tileW), height: Math.floor(tileH), cols, rows };
     };
 
-    const tileSize = computeTileSize();
-    const tileStyle = tileSize ? { width: tileSize.width, height: tileSize.height } : undefined;
+    const layout = computeTileSize();
+    const tileStyle = layout ? { width: layout.width, height: layout.height } : undefined;
+    const gridStyle = layout ? {
+        display: 'grid',
+        gridTemplateColumns: `repeat(${layout.cols}, ${layout.width}px)`,
+        gridTemplateRows: `repeat(${layout.rows}, ${layout.height}px)`,
+        gap: '12px',
+        justifyContent: 'center',
+        alignContent: 'center'
+    } : { display: 'flex', justifyContent: 'center', alignItems: 'center' };
 
     return (
         <div className="h-screen bg-[#0A0A0B] text-white flex font-sans overflow-hidden">
@@ -523,11 +531,11 @@ const RoomPage: React.FC = () => {
                     {/* Background ambient light (behind everything) */}
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-indigo-900/10 blur-[120px] rounded-full pointer-events-none"></div>
 
-                    <div ref={containerRef} className="flex-1 h-full flex flex-wrap justify-center items-center content-center gap-3 relative z-10 transition-all duration-300">
+                    <div ref={containerRef} style={gridStyle} className="flex-1 h-full relative z-10">
                         {/* Local tile */}
                         <div
                             style={tileStyle}
-                            className="relative overflow-hidden rounded-2xl bg-[#121214] ring-1 ring-white/10 shadow-xl transition-all hover:ring-indigo-500/50 hover:shadow-indigo-500/10"
+                            className="relative overflow-hidden rounded-2xl bg-[#121214] ring-1 ring-white/10 shadow-xl transition duration-300 hover:ring-indigo-500/50 hover:shadow-indigo-500/10"
                         >
                             <VideoPlayer
                                 stream={localStream}
@@ -555,7 +563,7 @@ const RoomPage: React.FC = () => {
                             <div
                                 key={uid}
                                 style={tileStyle}
-                                className="relative overflow-hidden rounded-2xl bg-[#121214] ring-1 ring-white/10 shadow-xl transition-all hover:ring-purple-500/50 hover:shadow-purple-500/10"
+                                className="relative overflow-hidden rounded-2xl bg-[#121214] ring-1 ring-white/10 shadow-xl transition duration-300 hover:ring-purple-500/50 hover:shadow-purple-500/10"
                             >
                                 <VideoPlayer
                                     stream={stream}
