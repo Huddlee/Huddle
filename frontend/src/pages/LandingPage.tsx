@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import useDocumentTitle from '../hooks/useDocumentTitle';
 import LiquidEther from '../components/LiquidEther/LiquidEther';
 import { guestLogin } from '../utils/api';
 import Toast from '../components/Toast';
@@ -7,6 +8,7 @@ import Toast from '../components/Toast';
 const ETHER_COLORS = ['#5227FF', '#FF9FFC', '#B497CF'];
 
 const LandingPage: React.FC = () => {
+    useDocumentTitle('Connecting to room | HUDDLE');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();

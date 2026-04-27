@@ -54,7 +54,8 @@ export const useSignaling = (roomCode: string | undefined) => {
 
         const token = localStorage.getItem('huddle_token');
         if (!token) {
-            console.error("No huddle_token found in localStorage");
+            console.error("No huddle_token found in localStorage. Redirecting to dashboard.");
+            window.location.href = '/';
             return;
         }
 
@@ -159,7 +160,11 @@ export const useSignaling = (roomCode: string | undefined) => {
 
             } catch (error) {
                 console.error("Failed to join room via API before opening WebSocket:", error);
-                if (isMounted) setConnectionStatus('disconnected');
+                if (isMounted) {
+                    setConnectionStatus('disconnected');
+                    // Redirect to dashboard on bad request / invalid room
+                    window.location.href = '/';
+                }
             }
         };
 

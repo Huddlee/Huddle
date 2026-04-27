@@ -8,11 +8,18 @@ export interface ToastMessage {
 interface ToastContainerProps {
     toasts: ToastMessage[];
     removeToast: (id: string) => void;
+    isChatOpen?: boolean;
 }
 
-const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, removeToast }) => {
+const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, removeToast, isChatOpen = false }) => {
     return (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none">
+        <div
+            className="fixed top-4 z-50 flex flex-col items-end gap-2 pointer-events-none"
+            style={{
+                right: isChatOpen ? 'calc(340px + 1.5rem)' : '1.5rem',
+                transition: 'right 300ms ease-in-out',
+            }}
+        >
             {toasts.map((toast) => (
                 <ToastItem key={toast.id} toast={toast} onRemove={() => removeToast(toast.id)} />
             ))}
@@ -37,7 +44,7 @@ const ToastItem: React.FC<{ toast: ToastMessage; onRemove: () => void }> = ({ to
 
     return (
         <div
-            className={`bg-[#2c2c2e]/90 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg backdrop-blur-md border border-white/10 transition-all duration-300 pointer-events-auto ${visible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-4 scale-95'
+            className={`bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-lg shadow-red-500/20 backdrop-blur-md transition-all duration-300 pointer-events-auto ${visible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-4 scale-95'
                 }`}
         >
             {toast.text}

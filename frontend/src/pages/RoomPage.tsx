@@ -1,19 +1,24 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import useDocumentTitle from '../hooks/useDocumentTitle';
 import VideoPlayer from '../components/VideoPlayer';
 import ChatPanel, { type ChatMessage } from '../components/ChatPanel';
-import ChatBubble from '../components/ChatBubble';
+import ChatBubbleStack, { type BubbleMessage } from '../components/ChatBubble';
+import { ToastContainer, type ToastMessage } from '../components/Toast';
 import { useSignaling } from '../hooks/useSignaling';
 import { getOrCreateDisplayName } from '../utils/nameGenerator';
 
 const RoomPage: React.FC = () => {
+    useDocumentTitle('In Room | HUDDLE');
     const { roomCode } = useParams<{ roomCode: string }>();
     const navigate = useNavigate();
 
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const localStreamRef = useRef<MediaStream | null>(null);
-    const [isCameraOn, setIsCameraOn] = useState(true);
-    const [isMicOn, setIsMicOn] = useState(true);
+
+    // Read pre-join preferences (set by the lobby page) — lazy initializers read once
+    const [isCameraOn, setIsCameraOn] = useState(() => sessionStorage.getItem('prejoin_camera') !== 'off');
+    const [isMicOn, setIsMicOn] = useState(() => sessionStorage.getItem('prejoin_mic') !== 'off');
 
     const myUserIdRef = useRef<string>('');
     const peersRef = useRef<Record<string, RTCPeerConnection>>({});
@@ -24,14 +29,27 @@ const RoomPage: React.FC = () => {
     const myDisplayName = useRef(getOrCreateDisplayName()).current;
     const [peerNames, setPeerNames] = useState<Record<string, string>>({});
     const [peerCameraStates, setPeerCameraStates] = useState<Record<string, boolean>>({});
-    const isCameraOnRef = useRef(true);
+    const [peerMicStates, setPeerMicStates] = useState<Record<string, boolean>>({});
+    const isCameraOnRef = useRef(sessionStorage.getItem('prejoin_camera') !== 'off');
+    const isMicOnRef = useRef(sessionStorage.getItem('prejoin_mic') !== 'off');
     const dataChannelsRef = useRef<Record<string, RTCDataChannel>>({});
 
     // Chat state
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [hasUnread, setHasUnread] = useState(false);
-    const [latestBubble, setLatestBubble] = useState<{ id: string, sender: string, text: string } | null>(null);
+    const [bubbleStack, setBubbleStack] = useState<BubbleMessage[]>([]);
+
+    // Room event toasts (join/leave)
+    const [roomToasts, setRoomToasts] = useState<ToastMessage[]>([]);
+    const addRoomToast = useCallback((text: string) => {
+        const id = Date.now().toString() + Math.random().toString(36).substring(2, 6);
+        setRoomToasts(prev => [...prev, { id, text }]);
+    }, []);
+    const removeRoomToast = useCallback((id: string) => {
+        setRoomToasts(prev => prev.filter(t => t.id !== id));
+    }, []);
+    const peerNamesRef = useRef<Record<string, string>>({});
 
     const isChatOpenRef = useRef(isChatOpen);
     useEffect(() => {
@@ -55,14 +73,17 @@ const RoomPage: React.FC = () => {
     const setupDataChannel = useCallback((dc: RTCDataChannel, peerUid: string) => {
         dc.onopen = () => {
             dataChannelsRef.current[peerUid] = dc;
-            // Send current camera state immediately so new peer knows
+            // Send current camera/mic states immediately so new peer knows
             dc.send(JSON.stringify({ type: 'CAMERA_STATE', cameraOn: isCameraOnRef.current }));
+            dc.send(JSON.stringify({ type: 'MIC_STATE', micOn: isMicOnRef.current }));
         };
         dc.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'CAMERA_STATE') {
                     setPeerCameraStates(prev => ({ ...prev, [peerUid]: data.cameraOn }));
+                } else if (data.type === 'MIC_STATE') {
+                    setPeerMicStates(prev => ({ ...prev, [peerUid]: data.micOn }));
                 } else if (data.type === 'CHAT_MSG') {
                     const newMsg: ChatMessage = {
                         id: data.id,
@@ -75,7 +96,10 @@ const RoomPage: React.FC = () => {
 
                     if (!isChatOpenRef.current) {
                         setHasUnread(true);
-                        setLatestBubble({ id: newMsg.id, sender: newMsg.sender, text: newMsg.text });
+                        setBubbleStack(prev => [
+                            ...prev.slice(-2), // keep at most 2 old, add 1 new = max 3
+                            { id: newMsg.id, sender: newMsg.sender, text: newMsg.text }
+                        ]);
                     }
                 }
             } catch (e) {
@@ -173,11 +197,15 @@ const RoomPage: React.FC = () => {
                     const leftUid = message.replace(" disconnected", "").trim();
                     if (leftUid === myUserIdRef.current) return;
 
+                    const leftName = peerNamesRef.current[leftUid] || `Guest ${leftUid.slice(0, 4).toUpperCase()}`;
+                    addRoomToast(`${leftName} left the room`);
+
                     if (peersRef.current[leftUid]) {
                         peersRef.current[leftUid].close();
                         delete peersRef.current[leftUid];
                     }
                     delete dataChannelsRef.current[leftUid];
+                    delete peerNamesRef.current[leftUid];
                     setRemoteStreams(prev => {
                         const updated = { ...prev };
                         delete updated[leftUid];
@@ -193,6 +221,11 @@ const RoomPage: React.FC = () => {
                         delete updated[leftUid];
                         return updated;
                     });
+                    setPeerMicStates(prev => {
+                        const updated = { ...prev };
+                        delete updated[leftUid];
+                        return updated;
+                    });
                 }
                 else if (responseType === 'OFFER') {
                     if (from === myUserIdRef.current) return;
@@ -201,6 +234,10 @@ const RoomPage: React.FC = () => {
                     // Extract peer display name from the offer
                     if (payload.displayName) {
                         setPeerNames(prev => ({ ...prev, [from]: payload.displayName }));
+                        peerNamesRef.current[from] = payload.displayName;
+                        addRoomToast(`${payload.displayName} joined the room`);
+                    } else {
+                        addRoomToast(`Someone joined the room`);
                     }
 
                     // Use connection created during PEER_JOIN if it exists, otherwise create
@@ -233,6 +270,8 @@ const RoomPage: React.FC = () => {
                     // Extract peer display name from the answer
                     if (payload.displayName) {
                         setPeerNames(prev => ({ ...prev, [from]: payload.displayName }));
+                        peerNamesRef.current[from] = payload.displayName;
+                        addRoomToast(`${payload.displayName} joined the room`);
                     }
 
                     const pc = peersRef.current[from];
@@ -272,17 +311,17 @@ const RoomPage: React.FC = () => {
 
 
     useEffect(() => {
-        // const activeRoom = sessionStorage.getItem('active_room');
-        // if (activeRoom !== roomCode) {
-        //     navigate('/');
-        //     return;
-        // }
+        const token = localStorage.getItem('huddle_token');
+        if (!token) {
+            navigate('/');
+            return;
+        }
 
-        // const token = localStorage.getItem('huddle_token');
-        // if (!token) {
-        //     navigate('/');
-        //     return;
-        // }
+        const activeRoom = sessionStorage.getItem('active_room');
+        if (activeRoom !== roomCode) {
+            navigate('/');
+            return;
+        }
 
         let isMounted = true;
 
@@ -299,6 +338,28 @@ const RoomPage: React.FC = () => {
                 }
                 setLocalStream(stream);
                 localStreamRef.current = stream;
+
+                // Apply pre-join camera/mic preferences
+                const prefCam = sessionStorage.getItem('prejoin_camera');
+                const prefMic = sessionStorage.getItem('prejoin_mic');
+
+                if (prefCam === 'off') {
+                    const videoTrack = stream.getVideoTracks()[0];
+                    if (videoTrack) {
+                        videoTrack.enabled = false;
+                    }
+                }
+                if (prefMic === 'off') {
+                    const audioTrack = stream.getAudioTracks()[0];
+                    if (audioTrack) {
+                        audioTrack.enabled = false;
+                    }
+                }
+
+                // Clean up session flags
+                sessionStorage.removeItem('prejoin_camera');
+                sessionStorage.removeItem('prejoin_mic');
+
                 setMediaReady(true);
             } catch (error) {
                 console.error("Error accessing media devices.", error);
@@ -341,21 +402,21 @@ const RoomPage: React.FC = () => {
 
 
     const toggleCamera = () => {
-        if (localStream) {
-            const videoTrack = localStream.getVideoTracks()[0];
-            if (videoTrack) {
-                videoTrack.enabled = !videoTrack.enabled;
-                const newState = videoTrack.enabled;
-                setIsCameraOn(newState);
-                isCameraOnRef.current = newState;
+        if (!localStream) return;
 
-                // Broadcast camera state via RTCDataChannel to all peers
-                Object.values(dataChannelsRef.current).forEach(dc => {
-                    if (dc.readyState === 'open') {
-                        dc.send(JSON.stringify({ type: 'CAMERA_STATE', cameraOn: newState }));
-                    }
-                });
-            }
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+            const newState = !isCameraOn;
+            videoTrack.enabled = newState;
+            setIsCameraOn(newState);
+            isCameraOnRef.current = newState;
+
+            // Broadcast camera state via RTCDataChannel to all peers
+            Object.values(dataChannelsRef.current).forEach(dc => {
+                if (dc.readyState === 'open') {
+                    dc.send(JSON.stringify({ type: 'CAMERA_STATE', cameraOn: newState }));
+                }
+            });
         }
     };
 
@@ -365,6 +426,14 @@ const RoomPage: React.FC = () => {
             if (audioTrack) {
                 audioTrack.enabled = !audioTrack.enabled;
                 setIsMicOn(audioTrack.enabled);
+                isMicOnRef.current = audioTrack.enabled;
+
+                // Broadcast mic state via RTCDataChannel to all peers
+                Object.values(dataChannelsRef.current).forEach(dc => {
+                    if (dc.readyState === 'open') {
+                        dc.send(JSON.stringify({ type: 'MIC_STATE', micOn: audioTrack.enabled }));
+                    }
+                });
             }
         }
     };
@@ -445,7 +514,8 @@ const RoomPage: React.FC = () => {
 
         if (peerCount === 1) { cols = 1; rows = 1; }
         else if (peerCount === 2) { cols = 2; rows = 1; }
-        else if (peerCount <= 4) { cols = 2; rows = 2; }
+        else if (peerCount === 3) { cols = 2; rows = 2; }
+        else if (peerCount === 4) { cols = 2; rows = 2; }
         else if (peerCount <= 6) { cols = 3; rows = 2; }
         else { cols = 4; rows = 2; }
 
@@ -466,13 +536,13 @@ const RoomPage: React.FC = () => {
 
     const layout = computeTileSize();
     const tileStyle = layout ? { width: layout.width, height: layout.height } : undefined;
-    const gridStyle = layout ? {
-        display: 'grid',
-        gridTemplateColumns: `repeat(${layout.cols}, ${layout.width}px)`,
-        gridTemplateRows: `repeat(${layout.rows}, ${layout.height}px)`,
+    const gridStyle: React.CSSProperties = layout ? {
+        display: 'flex',
+        flexWrap: 'wrap',
         gap: '12px',
         justifyContent: 'center',
-        alignContent: 'center'
+        alignContent: 'center',
+        alignItems: 'center',
     } : { display: 'flex', justifyContent: 'center', alignItems: 'center' };
 
     return (
@@ -541,21 +611,19 @@ const RoomPage: React.FC = () => {
                                 stream={localStream}
                                 muted={true}
                                 className="w-full h-full object-cover"
+                                isEnabled={isCameraOn}
                             />
-                            <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1.5 rounded-lg text-sm font-semibold backdrop-blur-md shadow-lg border border-white/10 z-20">
-                                <span className="text-indigo-300">{myDisplayName}</span> <span className="text-gray-500 text-xs">(You)</span>
+                            <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1.5 rounded-lg text-sm font-semibold backdrop-blur-md shadow-lg border border-white/10 z-20 flex items-center gap-2">
+                                <span className="text-indigo-300">{myDisplayName}</span>
+                                <span className="text-gray-500 text-xs">(You)</span>
+                                {!isMicOn && (
+                                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
+                                    </svg>
+                                )}
                             </div>
 
-                            {!isCameraOn && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-[#121214] z-10">
-                                    <div className="w-20 h-20 bg-gray-800/80 rounded-full flex items-center justify-center shadow-lg border border-gray-700/50 backdrop-blur-md">
-                                        <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3l18 18"></path>
-                                        </svg>
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
                         {/* Remote tiles */}
@@ -569,38 +637,36 @@ const RoomPage: React.FC = () => {
                                     stream={stream}
                                     muted={false}
                                     className="w-full h-full object-cover"
+                                    isEnabled={peerCameraStates[uid] !== false}
                                 />
-                                <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1.5 rounded-lg text-sm font-semibold backdrop-blur-md shadow-lg border border-white/10 z-20">
+                                <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1.5 rounded-lg text-sm font-semibold backdrop-blur-md shadow-lg border border-white/10 z-20 flex items-center gap-2">
                                     <span className="text-purple-300">{peerNames[uid] || `Guest ${uid.slice(0, 4).toUpperCase()}`}</span>
+                                    {peerMicStates[uid] === false && (
+                                        <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
+                                        </svg>
+                                    )}
                                 </div>
 
-                                {peerCameraStates[uid] === false && (
-                                    <div className="absolute inset-0 flex items-center justify-center bg-[#121214] z-10">
-                                        <div className="w-20 h-20 bg-gray-800/80 rounded-full flex items-center justify-center shadow-lg border border-gray-700/50 backdrop-blur-md">
-                                            <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3l18 18"></path>
-                                            </svg>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         ))}
                     </div>
 
-                    {/* Floating Chat Bubble Notification */}
-                    {!isChatOpen && latestBubble && (
-                        <ChatBubble
-                            key={latestBubble.id}
-                            sender={latestBubble.sender}
-                            text={latestBubble.text}
-                            onDismiss={() => setLatestBubble(null)}
+                    {/* Floating Chat Bubble Notification Stack */}
+                    {!isChatOpen && bubbleStack.length > 0 && (
+                        <ChatBubbleStack
+                            bubbles={bubbleStack}
+                            onDismiss={(id) => setBubbleStack(prev => prev.filter(b => b.id !== id))}
                             onClick={() => {
-                                setLatestBubble(null);
+                                setBubbleStack([]);
                                 setIsChatOpen(true);
                             }}
                         />
                     )}
+
+                    {/* Room event toasts (join/leave) */}
+                    <ToastContainer toasts={roomToasts} removeToast={removeRoomToast} isChatOpen={isChatOpen} />
                 </main>
 
                 <footer className="mt-3 flex justify-center items-center gap-6 pb-2 shrink-0">

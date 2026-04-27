@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import useDocumentTitle from '../hooks/useDocumentTitle';
 import Silk from '../components/Silk/Silk';
 
 const AboutPage: React.FC = () => {
+    useDocumentTitle('About us | HUDDLE');
     return (
         <div className="min-h-screen bg-[#0A0A0B] text-white font-sans relative">
             {/* Silk Background */}

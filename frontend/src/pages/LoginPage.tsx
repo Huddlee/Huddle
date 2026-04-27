@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import useDocumentTitle from '../hooks/useDocumentTitle';
 import LiquidEther from '../components/LiquidEther/LiquidEther';
 import { loginUser } from '../utils/api';
 import Toast from '../components/Toast';
@@ -7,6 +8,7 @@ import Toast from '../components/Toast';
 const ETHER_COLORS = ['#5227FF', '#FF9FFC', '#B497CF'];
 
 const LoginPage: React.FC = () => {
+    useDocumentTitle('Login | HUDDLE');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);

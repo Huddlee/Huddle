@@ -4,11 +4,12 @@ interface VideoPlayerProps {
     stream: MediaStream | null;
     muted?: boolean;
     className?: string;
+    isEnabled?: boolean;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ stream, muted = false, className = '' }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ stream, muted = false, className = '', isEnabled }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
-    const [isVideoEnabled, setIsVideoEnabled] = useState(false);
+    const [isVideoTrackEnabled, setIsVideoTrackEnabled] = useState(false);
 
     useEffect(() => {
         if (videoRef.current && stream) {
@@ -19,21 +20,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ stream, muted = false, classN
     // Reactively track whether the video track is enabled (handles remote mute/unmute)
     useEffect(() => {
         if (!stream) {
-            setIsVideoEnabled(false);
+            setIsVideoTrackEnabled(false);
             return;
         }
 
         const videoTrack = stream.getVideoTracks()[0];
         if (!videoTrack) {
-            setIsVideoEnabled(false);
+            setIsVideoTrackEnabled(false);
             return;
         }
 
         // Set initial state
-        setIsVideoEnabled(videoTrack.enabled && !videoTrack.muted);
+        setIsVideoTrackEnabled(videoTrack.enabled && !videoTrack.muted);
 
-        const handleMute = () => setIsVideoEnabled(false);
-        const handleUnmute = () => setIsVideoEnabled(true);
+        const handleMute = () => setIsVideoTrackEnabled(false);
+        const handleUnmute = () => setIsVideoTrackEnabled(true);
 
         videoTrack.addEventListener('mute', handleMute);
         videoTrack.addEventListener('unmute', handleUnmute);
@@ -44,7 +45,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ stream, muted = false, classN
         };
     }, [stream]);
 
-    const showPlaceholder = !stream || !isVideoEnabled;
+    // Use prop if provided, otherwise fallback to track state
+    const effectiveVideoEnabled = isEnabled !== undefined ? isEnabled : isVideoTrackEnabled;
+    const showPlaceholder = !stream || !effectiveVideoEnabled;
 
     return (
         <div className={`relative overflow-hidden rounded-2xl bg-gray-900 border border-gray-800 shadow-lg ${className}`}>

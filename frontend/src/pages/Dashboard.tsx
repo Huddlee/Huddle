@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import useDocumentTitle from '../hooks/useDocumentTitle';
 import { createRoom, joinRoom } from '../utils/api';
 import Toast from '../components/Toast';
 import { getOrCreateDisplayName, generateDisplayName } from '../utils/nameGenerator';
@@ -11,6 +12,7 @@ const LINE_COUNT = [10, 15, 20];
 const LINE_DISTANCE = [8, 6, 4];
 
 const Dashboard: React.FC = () => {
+    useDocumentTitle('HUDDLE - Home');
     const [roomCode, setRoomCode] = useState('');
     const [loadingCreate, setLoadingCreate] = useState(false);
     const [loadingJoin, setLoadingJoin] = useState(false);
@@ -44,7 +46,7 @@ const Dashboard: React.FC = () => {
             if (!token) throw new Error('No token found');
             const newRoomCode = await createRoom(token);
             sessionStorage.setItem('active_room', newRoomCode);
-            navigate(`/room/${newRoomCode}`);
+            navigate(`/room/${newRoomCode}/lobby`);
         } catch (error) {
             console.error('Failed to create room', error);
             setToast({ message: 'Failed to create room. Please try again.', type: 'error' });
@@ -61,7 +63,7 @@ const Dashboard: React.FC = () => {
             if (!token) throw new Error('No token found');
             await joinRoom(code, token);
             sessionStorage.setItem('active_room', code);
-            navigate(`/room/${code}`);
+            navigate(`/room/${code}/lobby`);
         } catch (error) {
             console.error('Failed to join room', error);
             setToast({ message: 'Failed to join room. Please check the code and try again.', type: 'error' });
